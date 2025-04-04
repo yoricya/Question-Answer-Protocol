@@ -22,41 +22,31 @@ func Start_Server(listen_addr string, on_accept_qestion func(question []byte, ad
 		go func() {
 			buffer = buffer[:n]
 
-			// Check Question Marker
-			if buffer[0] != 94 || buffer[1] != 48 {
+			// Check QA Marker, need Question (0-64)
+			if buffer[9] > 64 {
 				return
 			}
 
-			// Check Adaptive Q Marker
-			if buffer[2] != buffer[10]*4 {
-				fmt.Println("AQ Marker invalid.")
-				return
-			}
+			repeats := int(buffer[8])
 
-			repeats := int(buffer[11])
-
-			answer := on_accept_qestion(buffer[12:], addr, repeats)
+			answer := on_accept_qestion(buffer[10:], addr, repeats)
 			if answer == nil {
 				return
 			}
 
-			answ_buffer := make([]byte, len(answer)+12)
+			answ_buffer := make([]byte, len(answer)+10)
 
-			// Answer Marker
-			answ_buffer[0] = 92
-			answ_buffer[1] = 46
+			// Put Question ID
+			copy(answ_buffer[:8], buffer[:8])
 
-			// Adapted Answ Marker
-			answ_buffer[2] = buffer[10] * 4
+			// Put Repeats
+			answ_buffer[8] = buffer[8]
 
-			// Put repeats value
-			answ_buffer[11] = buffer[11]
-
-			// Question ID value
-			copy(answ_buffer[3:], buffer[3:11])
+			// Put QA Marker = Answer
+			answ_buffer[9] = 255
 
 			// Copy data
-			copy(answ_buffer[12:], answer)
+			copy(answ_buffer[10:], answer)
 
 			conn.WriteTo(answ_buffer, addr)
 		}()

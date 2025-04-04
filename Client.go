@@ -17,20 +17,16 @@ func Send_question(address string, data []byte) (answer []byte, err error, repea
 	question_id := make([]byte, 8)
 	binary.BigEndian.PutUint64(question_id, rand.Uint64())
 
-	datagram := make([]byte, len(data)+12)
-
-	// Question Marker
-	datagram[0] = 94
-	datagram[1] = 48
-
-	// Adapted Q Marker
-	datagram[2] = question_id[7] * 4
+	datagram := make([]byte, len(data)+10)
 
 	// Question ID value
-	copy(datagram[3:], question_id)
+	copy(datagram, question_id)
+
+	// Set QA Marker = Question
+	datagram[9] = 0
 
 	// Copy data
-	copy(datagram[12:], data)
+	copy(datagram[10:], data)
 
 	for i := 0; i < 12; i++ {
 		if i != 0 {
@@ -38,7 +34,7 @@ func Send_question(address string, data []byte) (answer []byte, err error, repea
 		}
 
 		// Repeats Value
-		datagram[11] = byte(i)
+		datagram[8] = byte(i)
 
 		udpAddr, err := net.ResolveUDPAddr("udp", address)
 		if err != nil {
@@ -61,6 +57,7 @@ func Send_question(address string, data []byte) (answer []byte, err error, repea
 
 		buffer := make([]byte, 65535)
 		for io := 0; io < 10; io++ {
+
 			n, _, err := conn.ReadFromUDP(buffer)
 			if err != nil {
 				conn.Close()
@@ -68,23 +65,17 @@ func Send_question(address string, data []byte) (answer []byte, err error, repea
 			}
 			buffer = buffer[:n]
 
-			// Check Answer Marker
-			if buffer[0] != 92 || buffer[1] != 46 {
-				conn.Close()
-				break
-			}
-
-			// Check Adaptive Answer Marker
-			if buffer[2] != datagram[2] {
+			// Check QA Marker, need Answer (191-255)
+			if buffer[9] < 191 {
 				continue
 			}
 
 			// Check Question ID
-			if !bytes.Equal(buffer[3:11], datagram[3:11]) {
+			if !bytes.Equal(buffer[:8], question_id) {
 				continue
 			}
 
-			return buffer[12:], nil, int(buffer[11])
+			return buffer[10:], nil, int(buffer[8])
 		}
 
 		conn.Close()
